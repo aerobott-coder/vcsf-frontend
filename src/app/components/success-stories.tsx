@@ -10,9 +10,8 @@ function CustomArrow({ onClick, direction }: { onClick?: () => void; direction: 
   return (
     <button
       onClick={onClick}
-      className={`absolute top-1/2 -translate-y-1/2 ${
-        direction === "left" ? "left-4" : "right-4"
-      } z-10 w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-[#D4AF37] hover:text-white transition-all duration-300`}
+      className={`absolute top-1/2 -translate-y-1/2 ${direction === "left" ? "left-4" : "right-4"
+        } z-10 w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-[#D4AF37] hover:text-white transition-all duration-300`}
     >
       <Icon className="w-6 h-6" />
     </button>
@@ -71,7 +70,7 @@ export function SuccessStories() {
   };
 
   return (
-    <section className="py-20 bg-white">
+    <section id="success-stories" className="py-20 bg-white">
       <div className="container mx-auto px-6">
         <motion.div
           initial={{ opacity: 0, y: 30 }}

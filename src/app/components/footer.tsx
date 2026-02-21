@@ -1,4 +1,4 @@
-import { Facebook, Instagram, Linkedin, Twitter } from "lucide-react";
+import { Facebook, Instagram, Linkedin, Youtube } from "lucide-react";
 
 export function Footer() {
   return (
@@ -8,14 +8,20 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
           {/* Column 1: Logo & Mission */}
           <div>
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 bg-[#D4AF37] rounded-lg flex items-center justify-center">
-                <span className="text-[#0F2C59]" style={{ fontWeight: 700, fontSize: "1.5rem" }}>V</span>
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 bg-white rounded-full overflow-hidden flex items-center justify-center shadow-lg p-1.5">
+                <img
+                  src="/assets/logo.png"
+                  alt="Vaishya Community Logo"
+                  className="w-full h-full object-contain"
+                />
               </div>
-              <span className="text-xl" style={{ fontWeight: 700 }}>Vaishya Entrepreneurs</span>
+              <span className="text-xl tracking-tight leading-none" style={{ fontWeight: 800 }}>
+                Vaishya <span className="text-[#D4AF37]">Community</span>
+              </span>
             </div>
             <p className="text-white/80 leading-relaxed">
-              Empowering the Vaishya community through education, startup support, and social development for a stronger future.
+              Building unity through education, entrepreneurship, and service.
             </p>
           </div>
 
@@ -28,11 +34,11 @@ export function Footer() {
                   Home
                 </a>
               </li>
-              {/*<li>
-                <a href="#" className="text-white/80 hover:text-[#D4AF37] transition-colors duration-300">
+              <li>
+                <a href="#about" className="text-white/80 hover:text-[#D4AF37] transition-colors duration-300">
                   About Us
                 </a>
-              </li>*/}
+              </li>
               <li>
                 <a href="#" className="text-white/80 hover:text-[#D4AF37] transition-colors duration-300">
                   Success Stories
@@ -121,35 +127,30 @@ export function Footer() {
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             {/* Copyright */}
             <p className="text-white/60 text-sm">
-              © 2026 Vaishya Entrepreneurs. All rights reserved.
+              © Vaishya Community Startup Foundation
             </p>
 
             {/* Social Media Icons */}
             <div className="flex gap-4">
               <a
-                href="#"
+                href="https://www.facebook.com/profile.php?id=61565981560352&sk=followers"
                 className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center hover:bg-[#D4AF37] transition-all duration-300 group"
               >
                 <Facebook className="w-5 h-5 text-white" />
               </a>
               <a
-                href="#"
+                href="https://www.instagram.com/vaishyacommunitystartupfoundat/"
                 className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center hover:bg-[#D4AF37] transition-all duration-300 group"
               >
                 <Instagram className="w-5 h-5 text-white" />
               </a>
               <a
-                href="#"
+                href="https://www.linkedin.com/in/vaishya-community-55120232b/"
                 className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center hover:bg-[#D4AF37] transition-all duration-300 group"
               >
                 <Linkedin className="w-5 h-5 text-white" />
               </a>
-              <a
-                href="#"
-                className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center hover:bg-[#D4AF37] transition-all duration-300 group"
-              >
-                <Twitter className="w-5 h-5 text-white" />
-              </a>
+
             </div>
 
             {/* Legal Links */}

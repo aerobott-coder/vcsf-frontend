@@ -15,9 +15,8 @@ function CustomArrow({ onClick, direction }: { onClick?: () => void; direction: 
   return (
     <button
       onClick={onClick}
-      className={`absolute top-1/2 -translate-y-1/2 ${
-        direction === "left" ? "left-6 md:left-12" : "right-6 md:right-12"
-      } z-10 w-12 h-12 md:w-14 md:h-14 bg-white/20 hover:bg-[#D4AF37] rounded-full flex items-center justify-center transition-all duration-300`}
+      className={`absolute top-1/2 -translate-y-1/2 ${direction === "left" ? "left-6 md:left-12" : "right-6 md:right-12"
+        } z-10 w-12 h-12 md:w-14 md:h-14 bg-white/20 hover:bg-[#D4AF37] rounded-full flex items-center justify-center transition-all duration-300`}
     >
       <Icon className="w-6 h-6 md:w-7 md:h-7 text-white" />
     </button>
@@ -33,7 +32,7 @@ interface SlideProps {
   onMemberClick: () => void;
 }
 
-function HeroSlide({ image, heading, subheading, onDonateClick, onContactClick, onMemberClick  }: SlideProps) {
+function HeroSlide({ image, heading, subheading, onDonateClick, onContactClick, onMemberClick }: SlideProps) {
   return (
     <div className="relative h-screen flex items-center justify-center overflow-hidden">
       {/* Background Image with Subtle Parallax */}
@@ -159,7 +158,7 @@ export function HeroSection() {
   const [showMember, setShowMember] = useState(false);
 
   const handleContactClick = () => {
-  document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
+    document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
   };
 
 
@@ -214,7 +213,7 @@ export function HeroSection() {
 
   return (
     <>
-      <section className="hero-carousel">
+      <section id="home" className="hero-carousel">
         <style>{`
           .hero-carousel .slick-dots li button:before {
             display: none;
@@ -231,7 +230,7 @@ export function HeroSection() {
         <Slider {...settings}>
           {slides.map((slide, index) => (
             <HeroSlide key={index} {...slide} onDonateClick={() => setShowQR(true)} onContactClick={handleContactClick} onMemberClick={() => setShowMember(true)}
-/>
+            />
           ))}
         </Slider>
       </section>

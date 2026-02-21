@@ -11,11 +11,12 @@ const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycby88K9vw3wm6ChJqlC2civx0csRCFuK8aPpy6Gi4bm15ouULFCfqWyFYjBgdkGDk5gJnA/exec";
 
 const MEMBER_TYPES = [
-  { id: "promoter", label: "Promoter Member", amount: "12,00,000" },
-  { id: "co-promoter", label: "Co Promoter Member", amount: "6,00,000" },
-  { id: "chief-patron", label: "Chief Patron Member", amount: "2,51,000" },
-  { id: "patron", label: "Patron Member", amount: "1,51,000" },
-  { id: "general", label: "General Member", amount: "5,000" },
+  { id: "chief-patron", label: "Chief Patron Member", amount: "1,00,000" },
+  { id: "patron", label: "Patron Member", amount: "51,000" },
+  { id: "promoter", label: "Promoter Member", amount: "71,000" },
+  { id: "co-promoter", label: "Co Promoter Member", amount: "21,000" },
+  { id: "executive", label: "Executive Member", amount: "11,000" },
+  { id: "general", label: "General Member", amount: "1,100" },
 ];
 
 const QUALIFICATIONS = [
