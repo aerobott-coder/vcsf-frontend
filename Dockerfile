@@ -1,25 +1,23 @@
-# Use the official Node.js image
-FROM node:14
+# Stage 1: Build
+FROM node:18-alpine AS builder
 
-# Create and change to the app directory
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# Copy application dependency manifests to the container image
 COPY package*.json ./
-
-# Install dependencies
 RUN npm install
 
-# Add build-time argument
-
-
-
-# Copy local code to the container image
 COPY . .
-
-# Build the app
 RUN npm run build
 
-# Serve the app
+# Stage 2: Serve
+FROM node:18-alpine
+
+WORKDIR /app
+
 RUN npm install -g serve
-CMD ["serve", "-s", "build"]
+
+COPY --from=builder /app/dist ./dist
+
+EXPOSE 8080
+
+CMD ["sh", "-c", "serve -s dist -l $PORT"]
