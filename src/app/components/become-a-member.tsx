@@ -1,22 +1,25 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, CheckCircle, Loader2 } from "lucide-react";
+import { X, CheckCircle, Loader2, Download, ChevronRight, ChevronLeft, User, MapPin, Phone, Paperclip } from "lucide-react";
+import { memberApi } from "@/services/api";
 
 interface BecomeMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+// ── Config ────────────────────────────────────────────────────────────────────
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycby88K9vw3wm6ChJqlC2civx0csRCFuK8aPpy6Gi4bm15ouULFCfqWyFYjBgdkGDk5gJnA/exec";
 
+// ── Constants ─────────────────────────────────────────────────────────────────
 const MEMBER_TYPES = [
   { id: "chief-patron", label: "Chief Patron Member", amount: "1,00,000" },
-  { id: "patron", label: "Patron Member", amount: "51,000" },
-  { id: "promoter", label: "Promoter Member", amount: "71,000" },
-  { id: "co-promoter", label: "Co Promoter Member", amount: "21,000" },
-  { id: "executive", label: "Executive Member", amount: "11,000" },
-  { id: "general", label: "General Member", amount: "1,100" },
+  { id: "patron",       label: "Patron Member",        amount: "51,000"   },
+  { id: "promoter",     label: "Promoter Member",      amount: "71,000"   },
+  { id: "co-promoter",  label: "Co Promoter Member",   amount: "21,000"   },
+  { id: "executive",    label: "Executive Member",      amount: "11,000"   },
+  { id: "general",      label: "General Member",        amount: "1,100"    },
 ];
 
 const QUALIFICATIONS = [
@@ -34,147 +37,157 @@ const VAISH_GHATAK = [
   "Khandelwal", "Maheshwari", "Mittal", "Singhal", "Other",
 ];
 
+const STEPS = [
+  { id: 1, label: "Membership",  icon: null },
+  { id: 2, label: "Personal",    icon: null },
+  { id: 3, label: "Address",     icon: null },
+  { id: 4, label: "Attachments", icon: null },
+];
+
 type SubmitStatus = "idle" | "loading" | "success" | "error";
 
-// Converts a File to a base64 string (strips the data URL prefix)
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      resolve(result.split(",")[1]); // strip "data:image/png;base64,"
-    };
+    reader.onload  = () => resolve((reader.result as string).split(",")[1]);
     reader.onerror = () => reject(new Error("Failed to read file"));
     reader.readAsDataURL(file);
   });
 }
 
+function downloadCertificate(b64: string, name: string) {
+  const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  const blob  = new Blob([bytes], { type: "application/pdf" });
+  const url   = URL.createObjectURL(blob);
+  const a     = document.createElement("a");
+  a.href     = url;
+  a.download = `VCSF_Certificate_${name.replace(/\s+/g, "_")}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+const initialForm = {
+  name: "", fathersName: "", qualification: "", workCategory: "",
+  designation: "", firmName: "", spouseName: "", vaishGhatak: "",
+  gotra: "", dob: "", dateOfMarriage: "", spouseDob: "",
+  panCard: "", pinCode: "", place: "", district: "", state: "",
+  houseNumber: "", buildingArea: "", mobileNo: "", phoneStd: "",
+  email: "", referenceName: "CHARU GUPTA", referencePhone: "9829910090",
+  photo:  null as File | null,
+  aadhar: null as File | null,
+};
+
+// ── Component ─────────────────────────────────────────────────────────────────
 export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
-  const [memberType, setMemberType] = useState("promoter");
-  const [gender, setGender] = useState("male");
+  const [currentStep,   setCurrentStep]   = useState(1);
+  const [memberType,    setMemberType]    = useState("promoter");
+  const [gender,        setGender]        = useState("male");
   const [maritalStatus, setMaritalStatus] = useState("married");
-  const [agreed, setAgreed] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle");
+  const [agreed,        setAgreed]        = useState(false);
+  const [submitStatus,  setSubmitStatus]  = useState<SubmitStatus>("idle");
+  const [certB64,       setCertB64]       = useState("");
+  const [memberLabel,   setMemberLabel]   = useState("");
+  const [form, setForm] = useState(initialForm);
 
-  const [form, setForm] = useState({
-    name: "",
-    fathersName: "",
-    qualification: "",
-    workCategory: "",
-    designation: "",
-    firmName: "",
-    spouseName: "",
-    vaishGhatak: "",
-    gotra: "",
-    dob: "",
-    dateOfMarriage: "",
-    spouseDob: "",
-    panCard: "",
-    pinCode: "",
-    place: "",
-    district: "",
-    state: "",
-    houseNumber: "",
-    buildingArea: "",
-    mobileNo: "",
-    phoneStd: "",
-    email: "",
-    referenceName: "CHARU GUPTA",
-    referencePhone: "9829910090",
-    photo: null as File | null,
-    aadhar: null as File | null,
-  });
+  const contribution  = MEMBER_TYPES.find((m) => m.id === memberType)?.amount || "";
+  const selectedLabel = MEMBER_TYPES.find((m) => m.id === memberType)?.label  || "";
 
-  const contribution = MEMBER_TYPES.find((m) => m.id === memberType)?.amount || "";
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm({ ...form, [e.target.name]: e.target.value });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, field: "photo" | "aadhar") =>
+    setForm({ ...form, [field]: e.target.files?.[0] || null });
+
+  const handleClose = () => {
+    // Reset everything on close
+    setCurrentStep(1);
+    setMemberType("promoter");
+    setGender("male");
+    setMaritalStatus("married");
+    setAgreed(false);
+    setSubmitStatus("idle");
+    setCertB64("");
+    setMemberLabel("");
+    setForm(initialForm);
+    onClose();
   };
 
-  const handleFileChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-    field: "photo" | "aadhar"
-  ) => {
-    const file = e.target.files?.[0] || null;
-    setForm({ ...form, [field]: file });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     if (!agreed) return alert("Please agree to the terms.");
-
     setSubmitStatus("loading");
 
     try {
-      // Convert files to base64 in parallel
       const [photoBase64, aadharBase64] = await Promise.all([
-        form.photo ? fileToBase64(form.photo) : Promise.resolve(""),
+        form.photo  ? fileToBase64(form.photo)  : Promise.resolve(""),
         form.aadhar ? fileToBase64(form.aadhar) : Promise.resolve(""),
       ]);
 
-      // IST timestamp generated on the client
       const submissionTime = new Date().toLocaleString("en-IN", {
         timeZone: "Asia/Kolkata",
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
+        day: "2-digit", month: "2-digit", year: "numeric",
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
         hour12: true,
       });
 
-      const payload = {
-        submissionTime,
-        memberType,
+      const sharedPayload = {
+        submissionTime, memberType,
+        memberLabel: selectedLabel,
         contributionAmount: contribution,
-        gender,
-        maritalStatus,
-        name: form.name,
-        fathersName: form.fathersName,
-        qualification: form.qualification,
-        workCategory: form.workCategory,
-        designation: form.designation,
-        firmName: form.firmName,
-        spouseName: form.spouseName,
-        vaishGhatak: form.vaishGhatak,
-        gotra: form.gotra,
-        dob: form.dob,
+        gender, maritalStatus,
+        name:           form.name,
+        fathersName:    form.fathersName,
+        qualification:  form.qualification,
+        workCategory:   form.workCategory,
+        designation:    form.designation,
+        firmName:       form.firmName,
+        spouseName:     form.spouseName,
+        vaishGhatak:    form.vaishGhatak,
+        gotra:          form.gotra,
+        dob:            form.dob,
         dateOfMarriage: form.dateOfMarriage,
-        spouseDob: form.spouseDob,
-        panCard: form.panCard,
-        pinCode: form.pinCode,
-        place: form.place,
-        district: form.district,
-        state: form.state,
-        houseNumber: form.houseNumber,
-        buildingArea: form.buildingArea,
-        mobileNo: form.mobileNo,
-        phoneStd: form.phoneStd,
-        email: form.email,
-        referenceName: form.referenceName,
+        spouseDob:      form.spouseDob,
+        panCard:        form.panCard,
+        pinCode:        form.pinCode,
+        place:          form.place,
+        district:       form.district,
+        state:          form.state,
+        houseNumber:    form.houseNumber,
+        buildingArea:   form.buildingArea,
+        mobileNo:       form.mobileNo,
+        phoneStd:       form.phoneStd,
+        email:          form.email,
+        referenceName:  form.referenceName,
         referencePhone: form.referencePhone,
-        // File payloads — saved to Google Drive by Apps Script
         photoBase64,
-        photoFileName: form.photo?.name || "",
-        photoMimeType: form.photo?.type || "",
+        photoFileName:  form.photo?.name  || "",
+        photoMimeType:  form.photo?.type  || "",
         aadharBase64,
         aadharFileName: form.aadhar?.name || "",
         aadharMimeType: form.aadhar?.type || "",
       };
 
-      await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors", // Required for Apps Script; response will be opaque
+      const sheetsPromise = fetch(APPS_SCRIPT_URL, {
+        method: "POST", mode: "no-cors",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(sharedPayload),
       });
 
+      const flaskPromise = memberApi.register(sharedPayload);
+
+      const [, flaskData] = await Promise.all([
+        sheetsPromise.catch((err) => console.warn("[Sheets] failed silently:", err)),
+        flaskPromise,
+      ]);
+
+      setCertB64(flaskData.certificateB64 ?? "");
+      setMemberLabel(flaskData.memberLabel ?? selectedLabel);
+
+      if (flaskData.certificateB64) {
+        downloadCertificate(flaskData.certificateB64, form.name);
+      }
+
       setSubmitStatus("success");
-      setTimeout(() => {
-        setSubmitStatus("idle");
-        onClose();
-      }, 2500);
     } catch (err) {
       console.error("Submission error:", err);
       setSubmitStatus("error");
@@ -182,331 +195,475 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
     }
   };
 
+  // ── Styles ──────────────────────────────────────────────────────────────────
   const inputCls =
-    "w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37] text-sm transition-all bg-white";
-  const labelCls = "block text-[#0F2C59] text-sm mb-1.5 font-semibold";
-  const sectionHeadingCls =
-    "text-[#0F2C59] text-base font-bold mb-4 mt-6 pb-1 border-b border-[#D4AF37]/40";
+    "w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:border-[#D4AF37] text-sm transition-all bg-white placeholder:text-gray-400";
+  const labelCls = "block text-[#0F2C59] text-xs mb-1.5 font-semibold uppercase tracking-wide";
+  const sectionCls = "text-[#0F2C59] text-sm font-bold mb-3 mt-5 flex items-center gap-2";
 
+  // ── Step content ─────────────────────────────────────────────────────────────
+  const renderStep = () => {
+    switch (currentStep) {
+      case 1:
+        return (
+          <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+            <p className="text-gray-500 text-sm mb-5">Choose the membership tier that best suits you.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {MEMBER_TYPES.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setMemberType(m.id)}
+                  className={`relative text-left p-4 rounded-xl border-2 transition-all ${
+                    memberType === m.id
+                      ? "border-[#D4AF37] bg-[#D4AF37]/5 shadow-sm"
+                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  {memberType === m.id && (
+                    <span className="absolute top-3 right-3 w-4 h-4 rounded-full bg-[#D4AF37] flex items-center justify-center">
+                      <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                    </span>
+                  )}
+                  <p className={`text-xs font-bold uppercase tracking-wide mb-1 ${memberType === m.id ? "text-[#0F2C59]" : "text-gray-600"}`}>
+                    {m.label}
+                  </p>
+                  <p className={`text-lg font-bold ${memberType === m.id ? "text-[#D4AF37]" : "text-gray-400"}`}>
+                    ₹ {m.amount}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        );
+
+      case 2:
+        return (
+          <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Name <span className="text-red-500">*</span></label>
+                <input type="text" name="name" value={form.name} onChange={handleChange} placeholder="Full name" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Father's Name <span className="text-red-500">*</span></label>
+                <input type="text" name="fathersName" value={form.fathersName} onChange={handleChange} placeholder="Father's name" className={inputCls} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label className={labelCls}>Gender <span className="text-red-500">*</span></label>
+                <div className="flex gap-4 mt-1">
+                  {["male", "female"].map((g) => (
+                    <label key={g} className={`flex items-center gap-2 cursor-pointer px-4 py-2 rounded-lg border-2 text-sm flex-1 justify-center transition-all ${gender === g ? "border-[#D4AF37] bg-[#D4AF37]/5 text-[#0F2C59] font-semibold" : "border-gray-200 text-gray-500"}`}>
+                      <input type="radio" name="gender" value={g} checked={gender === g} onChange={() => setGender(g)} className="hidden" />
+                      <span className="capitalize">{g}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Marital Status <span className="text-red-500">*</span></label>
+                <div className="flex gap-2 mt-1 flex-wrap">
+                  {["married", "unmarried", "prefer not to say"].map((s) => (
+                    <label key={s} className={`flex items-center gap-1.5 cursor-pointer px-3 py-2 rounded-lg border-2 text-xs flex-1 justify-center transition-all ${maritalStatus === s ? "border-[#D4AF37] bg-[#D4AF37]/5 text-[#0F2C59] font-semibold" : "border-gray-200 text-gray-500"}`}>
+                      <input type="radio" name="maritalStatus" value={s} checked={maritalStatus === s} onChange={() => setMaritalStatus(s)} className="hidden" />
+                      <span className="capitalize">{s}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label className={labelCls}>Date of Birth <span className="text-red-500">*</span></label>
+                <input type="text" name="dob" value={form.dob} onChange={handleChange} placeholder="DD/MM/YYYY" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Spouse Name</label>
+                <input type="text" name="spouseName" value={form.spouseName} onChange={handleChange} placeholder="Husband / Wife name" className={inputCls} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label className={labelCls}>Date of Marriage</label>
+                <input type="text" name="dateOfMarriage" value={form.dateOfMarriage} onChange={handleChange} placeholder="DD/MM/YYYY" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Spouse Date of Birth</label>
+                <input type="text" name="spouseDob" value={form.spouseDob} onChange={handleChange} placeholder="DD/MM/YYYY" className={inputCls} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label className={labelCls}>Qualification</label>
+                <select name="qualification" value={form.qualification} onChange={handleChange} className={inputCls}>
+                  <option value="">Select qualification</option>
+                  {QUALIFICATIONS.map((q) => <option key={q}>{q}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Work Category</label>
+                <select name="workCategory" value={form.workCategory} onChange={handleChange} className={inputCls}>
+                  <option value="">Select work category</option>
+                  {WORK_CATEGORIES.map((w) => <option key={w}>{w}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label className={labelCls}>Designation</label>
+                <input type="text" name="designation" value={form.designation} onChange={handleChange} placeholder="Your designation" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Firm / Company</label>
+                <input type="text" name="firmName" value={form.firmName} onChange={handleChange} placeholder="Firm or company name" className={inputCls} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label className={labelCls}>Vaish Ghatak</label>
+                <select name="vaishGhatak" value={form.vaishGhatak} onChange={handleChange} className={inputCls}>
+                  <option value="">Select Vaish Ghatak</option>
+                  {VAISH_GHATAK.map((v) => <option key={v}>{v}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Gotra</label>
+                <input type="text" name="gotra" value={form.gotra} onChange={handleChange} placeholder="Your gotra" className={inputCls} />
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <label className={labelCls}>PAN Card</label>
+              <input type="text" name="panCard" value={form.panCard} onChange={handleChange} placeholder="Enter PAN to get 80G certificate" className={inputCls} />
+            </div>
+          </motion.div>
+        );
+
+      case 3:
+        return (
+          <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+            <p className={sectionCls}><MapPin className="w-4 h-4 text-[#D4AF37]" /> Address</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>House Number <span className="text-red-500">*</span></label>
+                <input type="text" name="houseNumber" value={form.houseNumber} onChange={handleChange} placeholder="House / Flat number" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Building / Area <span className="text-red-500">*</span></label>
+                <input type="text" name="buildingArea" value={form.buildingArea} onChange={handleChange} placeholder="Building, lane, road, area" className={inputCls} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label className={labelCls}>Pin Code <span className="text-red-500">*</span></label>
+                <input type="text" name="pinCode" value={form.pinCode} onChange={handleChange} placeholder="Pin code" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Place <span className="text-red-500">*</span></label>
+                <input type="text" name="place" value={form.place} onChange={handleChange} placeholder="City / Town" className={inputCls} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label className={labelCls}>District <span className="text-red-500">*</span></label>
+                <input type="text" name="district" value={form.district} onChange={handleChange} placeholder="District" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>State <span className="text-red-500">*</span></label>
+                <input type="text" name="state" value={form.state} onChange={handleChange} placeholder="State" className={inputCls} />
+              </div>
+            </div>
+
+            <p className={sectionCls}><Phone className="w-4 h-4 text-[#D4AF37]" /> Contact Details</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Mobile No <span className="text-red-500">*</span></label>
+                <input type="tel" name="mobileNo" value={form.mobileNo} onChange={handleChange} placeholder="10-digit mobile number" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Phone with STD Code</label>
+                <input type="tel" name="phoneStd" value={form.phoneStd} onChange={handleChange} placeholder="e.g. 011-XXXXXXXX" className={inputCls} />
+              </div>
+            </div>
+            <div className="mt-4">
+              <label className={labelCls}>Email ID</label>
+              <input type="email" name="email" value={form.email} onChange={handleChange} placeholder="your@email.com" className={inputCls} />
+            </div>
+
+            <p className={sectionCls}><User className="w-4 h-4 text-[#D4AF37]" /> Reference</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Reference Name</label>
+                <input type="text" name="referenceName" value={form.referenceName} onChange={handleChange} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Reference Phone</label>
+                <input type="tel" name="referencePhone" value={form.referencePhone} onChange={handleChange} className={inputCls} />
+              </div>
+            </div>
+          </motion.div>
+        );
+
+      case 4:
+        return (
+          <motion.div key="step4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+            <p className={sectionCls}><Paperclip className="w-4 h-4 text-[#D4AF37]" /> Upload Documents</p>
+
+            {/* Photo upload */}
+            <div className="mb-4">
+              <label className={labelCls}>Your Photo <span className="text-red-500">*</span></label>
+              <label className={`flex items-center gap-3 p-4 border-2 border-dashed rounded-xl cursor-pointer transition-all ${form.photo ? "border-green-400 bg-green-50" : "border-gray-200 hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/5"}`}>
+                <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, "photo")} className="hidden" />
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${form.photo ? "bg-green-100" : "bg-gray-100"}`}>
+                  {form.photo
+                    ? <CheckCircle className="w-5 h-5 text-green-500" />
+                    : <User className="w-5 h-5 text-gray-400" />
+                  }
+                </div>
+                <div>
+                  <p className={`text-sm font-semibold ${form.photo ? "text-green-700" : "text-gray-600"}`}>
+                    {form.photo ? form.photo.name : "Click to upload your photo"}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">JPG, PNG, WEBP supported</p>
+                </div>
+              </label>
+            </div>
+
+            {/* Aadhar upload */}
+            <div className="mb-6">
+              <label className={labelCls}>Aadhar Card <span className="text-red-500">*</span></label>
+              <label className={`flex items-center gap-3 p-4 border-2 border-dashed rounded-xl cursor-pointer transition-all ${form.aadhar ? "border-green-400 bg-green-50" : "border-gray-200 hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/5"}`}>
+                <input type="file" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, "aadhar")} className="hidden" />
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${form.aadhar ? "bg-green-100" : "bg-gray-100"}`}>
+                  {form.aadhar
+                    ? <CheckCircle className="w-5 h-5 text-green-500" />
+                    : <Paperclip className="w-5 h-5 text-gray-400" />
+                  }
+                </div>
+                <div>
+                  <p className={`text-sm font-semibold ${form.aadhar ? "text-green-700" : "text-gray-600"}`}>
+                    {form.aadhar ? form.aadhar.name : "Click to upload Aadhar card"}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">JPG, PNG, PDF supported</p>
+                </div>
+              </label>
+            </div>
+
+            {/* Summary card */}
+            <div className="bg-[#0F2C59]/5 rounded-xl p-4 mb-5 border border-[#0F2C59]/10">
+              <p className="text-xs font-bold uppercase tracking-wide text-[#0F2C59] mb-3">Registration Summary</p>
+              <div className="grid grid-cols-2 gap-y-2 text-sm">
+                <span className="text-gray-500">Membership</span>
+                <span className="font-semibold text-[#0F2C59] text-right">{selectedLabel}</span>
+                <span className="text-gray-500">Contribution</span>
+                <span className="font-semibold text-[#D4AF37] text-right">₹ {contribution}</span>
+                <span className="text-gray-500">Name</span>
+                <span className="font-semibold text-[#0F2C59] text-right truncate">{form.name || "—"}</span>
+                <span className="text-gray-500">Mobile</span>
+                <span className="font-semibold text-[#0F2C59] text-right">{form.mobileNo || "—"}</span>
+              </div>
+            </div>
+
+            {/* Agreement */}
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <div
+                onClick={() => setAgreed(!agreed)}
+                className={`mt-0.5 w-5 h-5 rounded flex-shrink-0 border-2 flex items-center justify-center transition-all ${agreed ? "bg-[#0F2C59] border-[#0F2C59]" : "border-gray-300 group-hover:border-[#0F2C59]"}`}
+              >
+                {agreed && <span className="text-white text-xs font-bold">✓</span>}
+              </div>
+              <p className="text-sm text-gray-600 leading-relaxed">
+                I agree to abide by the rules and objects of the mahasammelan and assure my full
+                and sincere co-operation in achieving the goals set out by the Federation.
+              </p>
+            </label>
+
+            {submitStatus === "error" && (
+              <motion.p
+                initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+                className="mt-3 text-sm text-red-500 text-center bg-red-50 py-2 px-4 rounded-lg"
+              >
+                Submission failed. Please check your connection and try again.
+              </motion.p>
+            )}
+          </motion.div>
+        );
+    }
+  };
+
+  // ── Success screen ───────────────────────────────────────────────────────────
+  if (submitStatus === "success") {
+    return (
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center"
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            >
+              <motion.div
+                initial={{ scale: 0 }} animate={{ scale: 1 }}
+                transition={{ delay: 0.2, type: "spring", stiffness: 400 }}
+                className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5"
+              >
+                <CheckCircle className="w-10 h-10 text-green-500" />
+              </motion.div>
+
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+                <h3 className="text-2xl font-bold text-[#0F2C59] mb-2">Registration Successful!</h3>
+                <p className="text-gray-500 text-sm mb-1">
+                  Welcome as a{" "}
+                  <span className="font-semibold text-[#0F2C59]">{memberLabel}</span>
+                </p>
+                <p className="text-gray-400 text-xs mb-6">
+                  {certB64
+                    ? "Your membership certificate has been downloaded."
+                    : "Your registration has been submitted for review."}
+                </p>
+
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  {certB64 && (
+                    <button
+                      onClick={() => downloadCertificate(certB64, form.name)}
+                      className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#0F2C59] text-white rounded-xl font-semibold text-sm hover:bg-[#082040] transition-colors"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download Certificate
+                    </button>
+                  )}
+                  <button
+                    onClick={handleClose}
+                    className="px-5 py-2.5 border-2 border-gray-200 text-gray-600 rounded-xl font-semibold text-sm hover:bg-gray-50 transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+  }
+
+  // ── Main modal ───────────────────────────────────────────────────────────────
   return (
     <AnimatePresence>
       {isOpen && (
         <motion.div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          onClick={handleClose}
         >
           <motion.div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto relative"
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
             transition={{ type: "spring", stiffness: 300, damping: 25 }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="sticky top-0 bg-[#0F2C59] text-white px-6 py-4 rounded-t-2xl flex items-start justify-between z-10">
+            <div className="bg-[#0F2C59] text-white px-6 py-4 rounded-t-2xl flex items-start justify-between flex-shrink-0">
               <div>
-                <h2 className="text-xl font-bold">JOIN US — Online Membership</h2>
-                <p className="text-white/70 text-sm mt-0.5">
-                  Membership Benefits &nbsp;|&nbsp; IVF Membership / Donation
-                </p>
+                <h2 className="text-lg font-bold">JOIN US — Online Membership</h2>
+                <p className="text-white/60 text-xs mt-0.5">Membership Benefits &nbsp;|&nbsp; IVF Membership / Donation</p>
               </div>
               <button
-                onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors mt-0.5 flex-shrink-0"
+                onClick={handleClose}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors flex-shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Success overlay */}
-            <AnimatePresence>
-              {submitStatus === "success" && (
-                <motion.div
-                  className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/97 rounded-2xl"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0 }}
-                >
-                  <CheckCircle className="w-16 h-16 text-green-500 mb-4" />
-                  <h3 className="text-2xl font-bold text-[#0F2C59] mb-2">
-                    Registration Successful!
-                  </h3>
-                  <p className="text-gray-500 text-sm text-center px-8">
-                    Your details and documents have been saved. We'll be in touch soon.
-                  </p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <form onSubmit={handleSubmit} className="px-6 pb-6">
-              <p className="text-sm text-gray-500 mt-4 mb-4">
-                All the <span className="text-red-500 font-semibold">*</span> marked fields are
-                mandatory.
-              </p>
-
-              {/* Member Type */}
-              <div className={sectionHeadingCls}>I wish to enroll myself as *</div>
-              <div className="flex flex-wrap gap-x-6 gap-y-2 mb-4">
-                {MEMBER_TYPES.map((m) => (
-                  <label
-                    key={m.id}
-                    className="flex items-center gap-2 cursor-pointer text-sm text-gray-700"
-                  >
-                    <input
-                      type="radio"
-                      name="memberType"
-                      value={m.id}
-                      checked={memberType === m.id}
-                      onChange={() => setMemberType(m.id)}
-                      className="accent-[#0F2C59]"
-                    />
-                    <span className="uppercase font-semibold text-xs">{m.label}</span>
-                  </label>
+            {/* Step indicator */}
+            <div className="px-6 py-4 border-b border-gray-100 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                {STEPS.map((step, i) => (
+                  <div key={step.id} className="flex items-center gap-2 flex-1">
+                    <div className="flex items-center gap-2 flex-1">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-all ${
+                        currentStep > step.id
+                          ? "bg-green-500 text-white"
+                          : currentStep === step.id
+                            ? "bg-[#0F2C59] text-white"
+                            : "bg-gray-100 text-gray-400"
+                      }`}>
+                        {currentStep > step.id ? "✓" : step.id}
+                      </div>
+                      <span className={`text-xs font-semibold hidden sm:block transition-colors ${
+                        currentStep === step.id ? "text-[#0F2C59]" : currentStep > step.id ? "text-green-500" : "text-gray-400"
+                      }`}>
+                        {step.label}
+                      </span>
+                    </div>
+                    {i < STEPS.length - 1 && (
+                      <div className={`h-0.5 flex-1 mx-1 rounded transition-all ${currentStep > step.id ? "bg-green-400" : "bg-gray-200"}`} />
+                    )}
+                  </div>
                 ))}
               </div>
+            </div>
 
-              {/* Contribution */}
-              <div className={sectionHeadingCls}>Contribution Details</div>
-              <div>
-                <label className={labelCls}>Contribution Amount (₹)</label>
-                <input
-                  type="text"
-                  value={contribution}
-                  readOnly
-                  className={`${inputCls} bg-gray-50 cursor-not-allowed font-semibold`}
-                />
-              </div>
+            {/* Scrollable form body */}
+            <div className="flex-1 overflow-y-auto px-6 py-5 min-h-0">
+              <AnimatePresence mode="wait">
+                {renderStep()}
+              </AnimatePresence>
+            </div>
 
-              {/* Personal Details */}
-              <div className={sectionHeadingCls}>Personal Details</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelCls}>Name <span className="text-red-500">*</span></label>
-                  <input type="text" name="name" value={form.name} onChange={handleChange} placeholder="Name *" className={inputCls} required />
-                </div>
-                <div>
-                  <label className={labelCls}>Father's Name <span className="text-red-500">*</span></label>
-                  <input type="text" name="fathersName" value={form.fathersName} onChange={handleChange} placeholder="Father's Name *" className={inputCls} required />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                <div>
-                  <label className={labelCls}>Gender <span className="text-red-500">*</span></label>
-                  <div className="flex gap-6 mt-1">
-                    {["male", "female"].map((g) => (
-                      <label key={g} className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
-                        <input type="radio" name="gender" value={g} checked={gender === g} onChange={() => setGender(g)} className="accent-[#0F2C59]" />
-                        <span className="capitalize">{g}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className={labelCls}>Marital Status <span className="text-red-500">*</span></label>
-                  <div className="flex gap-4 mt-1 flex-wrap">
-                    {["married", "unmarried", "prefer not to say"].map((s) => (
-                      <label key={s} className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
-                        <input type="radio" name="maritalStatus" value={s} checked={maritalStatus === s} onChange={() => setMaritalStatus(s)} className="accent-[#0F2C59]" />
-                        <span className="capitalize">{s}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                <div>
-                  <label className={labelCls}>Qualification / Education</label>
-                  <select name="qualification" value={form.qualification} onChange={handleChange} className={inputCls}>
-                    <option value="">Select Qualification / Education</option>
-                    {QUALIFICATIONS.map((q) => <option key={q}>{q}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelCls}>Work Category</label>
-                  <select name="workCategory" value={form.workCategory} onChange={handleChange} className={inputCls}>
-                    <option value="">Select Work Category</option>
-                    {WORK_CATEGORIES.map((w) => <option key={w}>{w}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                <div>
-                  <label className={labelCls}>Designation</label>
-                  <input type="text" name="designation" value={form.designation} onChange={handleChange} placeholder="Designation" className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Firm / Company Name</label>
-                  <input type="text" name="firmName" value={form.firmName} onChange={handleChange} placeholder="Firm/Company Name" className={inputCls} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                <div>
-                  <label className={labelCls}>Name of Husband/Wife (Spouse) <span className="text-red-500">*</span></label>
-                  <input type="text" name="spouseName" value={form.spouseName} onChange={handleChange} placeholder="Name of Husband/Wife (Spouse)*" className={inputCls} required />
-                </div>
-                <div>
-                  <label className={labelCls}>Vaish Ghatak</label>
-                  <select name="vaishGhatak" value={form.vaishGhatak} onChange={handleChange} className={inputCls}>
-                    <option value="">Select Vaish Ghatak</option>
-                    {VAISH_GHATAK.map((v) => <option key={v}>{v}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                <div>
-                  <label className={labelCls}>Gotra</label>
-                  <input type="text" name="gotra" value={form.gotra} onChange={handleChange} placeholder="Gotra" className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Date Of Birth <span className="text-red-500">*</span></label>
-                  <input type="text" name="dob" value={form.dob} onChange={handleChange} placeholder="DD/MM/YYYY *" className={inputCls} required />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                <div>
-                  <label className={labelCls}>Date Of Marriage</label>
-                  <input type="text" name="dateOfMarriage" value={form.dateOfMarriage} onChange={handleChange} placeholder="DD/MM/YYYY" className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Spouse Date of Birth</label>
-                  <input type="text" name="spouseDob" value={form.spouseDob} onChange={handleChange} placeholder="DD/MM/YYYY" className={inputCls} />
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <label className={labelCls}>PAN Card</label>
-                <input type="text" name="panCard" value={form.panCard} onChange={handleChange} placeholder="Enter PAN Card to get 80G certificate" className={inputCls} />
-              </div>
-
-              {/* Address */}
-              <div className={sectionHeadingCls}>Address</div>
-              <div className="mb-4">
-                <input type="text" value="INDIA" readOnly className={`${inputCls} bg-gray-50 cursor-not-allowed font-semibold`} />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelCls}>Pin Code <span className="text-red-500">*</span></label>
-                  <input type="text" name="pinCode" value={form.pinCode} onChange={handleChange} placeholder="Pin Code *" className={inputCls} required />
-                </div>
-                <div>
-                  <label className={labelCls}>Place <span className="text-red-500">*</span></label>
-                  <input type="text" name="place" value={form.place} onChange={handleChange} placeholder="Place *" className={inputCls} required />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                <div>
-                  <label className={labelCls}>District <span className="text-red-500">*</span></label>
-                  <input type="text" name="district" value={form.district} onChange={handleChange} placeholder="District *" className={inputCls} required />
-                </div>
-                <div>
-                  <label className={labelCls}>State <span className="text-red-500">*</span></label>
-                  <input type="text" name="state" value={form.state} onChange={handleChange} placeholder="State *" className={inputCls} required />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                <div>
-                  <label className={labelCls}>House Number <span className="text-red-500">*</span></label>
-                  <input type="text" name="houseNumber" value={form.houseNumber} onChange={handleChange} placeholder="House Number *" className={inputCls} required />
-                </div>
-                <div>
-                  <label className={labelCls}>Building Name / Lane / Road / Area <span className="text-red-500">*</span></label>
-                  <input type="text" name="buildingArea" value={form.buildingArea} onChange={handleChange} placeholder="Building Name / Lane / Road / Area*" className={inputCls} required />
-                </div>
-              </div>
-
-              {/* Contact Details */}
-              <div className={sectionHeadingCls}>Contact Details</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelCls}>Mobile No <span className="text-red-500">*</span></label>
-                  <input type="tel" name="mobileNo" value={form.mobileNo} onChange={handleChange} placeholder="Mobile No *" className={inputCls} required />
-                </div>
-                <div>
-                  <label className={labelCls}>Phone No with STD Code</label>
-                  <input type="tel" name="phoneStd" value={form.phoneStd} onChange={handleChange} placeholder="Phone No with STD Code" className={inputCls} />
-                </div>
-              </div>
-              <div className="mt-4">
-                <label className={labelCls}>E-mail ID</label>
-                <input type="email" name="email" value={form.email} onChange={handleChange} placeholder="E-mail ID" className={inputCls} />
-              </div>
-
-              {/* Attachments */}
-              <div className={sectionHeadingCls}>Attachment</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelCls}>Upload Your Photo <span className="text-red-500">*</span></label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleFileChange(e, "photo")}
-                    className="w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#0F2C59] file:text-white hover:file:bg-[#082040] cursor-pointer"
-                  />
-                  {form.photo && (
-                    <p className="text-xs text-green-600 mt-1.5">✓ {form.photo.name}</p>
-                  )}
-                </div>
-                <div>
-                  <label className={labelCls}>Upload Your Aadhar Card <span className="text-red-500">*</span></label>
-                  <input
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={(e) => handleFileChange(e, "aadhar")}
-                    className="w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#0F2C59] file:text-white hover:file:bg-[#082040] cursor-pointer"
-                  />
-                  {form.aadhar && (
-                    <p className="text-xs text-green-600 mt-1.5">✓ {form.aadhar.name}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Agreement */}
-              <div className="mt-6 flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  id="agree"
-                  checked={agreed}
-                  onChange={(e) => setAgreed(e.target.checked)}
-                  className="mt-0.5 accent-[#0F2C59] w-4 h-4 flex-shrink-0"
-                />
-                <label htmlFor="agree" className="text-sm text-gray-600 cursor-pointer">
-                  I agree to be abide with the rules and objects of the mahasammelan and assure you
-                  my full and sincere co-operation in achieving the goal set out by the Federation
-                </label>
-              </div>
-
-              {submitStatus === "error" && (
-                <p className="mt-3 text-sm text-red-500 text-center">
-                  Submission failed. Please check your connection and try again.
-                </p>
-              )}
-
-              {/* Submit */}
+            {/* Footer navigation */}
+            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between flex-shrink-0 bg-gray-50 rounded-b-2xl">
               <button
-                type="submit"
-                disabled={submitStatus === "loading"}
-                className="mt-6 w-full py-3 bg-[#D4AF37] text-[#0F2C59] rounded-xl font-bold text-sm hover:bg-[#E5C158] transition-colors shadow-lg hover:shadow-xl tracking-wide uppercase disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                type="button"
+                onClick={() => setCurrentStep((s) => Math.max(1, s - 1))}
+                disabled={currentStep === 1}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-gray-500 hover:text-[#0F2C59] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
-                {submitStatus === "loading" ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Uploading & Submitting...
-                  </>
-                ) : (
-                  "Register Yourself"
-                )}
+                <ChevronLeft className="w-4 h-4" /> Back
               </button>
-            </form>
+
+              <span className="text-xs text-gray-400 font-medium">
+                Step {currentStep} of {STEPS.length}
+              </span>
+
+              {currentStep < STEPS.length ? (
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep((s) => Math.min(STEPS.length, s + 1))}
+                  className="flex items-center gap-1.5 px-5 py-2 bg-[#0F2C59] text-white rounded-xl text-sm font-semibold hover:bg-[#082040] transition-colors"
+                >
+                  Next <ChevronRight className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={submitStatus === "loading" || !agreed}
+                  className="flex items-center gap-2 px-5 py-2 bg-[#D4AF37] text-[#0F2C59] rounded-xl text-sm font-bold hover:bg-[#E5C158] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                >
+                  {submitStatus === "loading" ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Submitting…</>
+                  ) : (
+                    <>Submit Registration <ChevronRight className="w-4 h-4" /></>
+                  )}
+                </button>
+              )}
+            </div>
           </motion.div>
         </motion.div>
       )}

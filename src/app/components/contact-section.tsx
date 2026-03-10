@@ -2,19 +2,22 @@ import { motion } from "motion/react";
 import { Mail, Phone, MapPin, Facebook, Instagram, Linkedin, CheckCircle } from "lucide-react";
 import { useState } from "react";
 
+// ── Config ────────────────────────────────────────────────────────────────────
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbzKJnB413FaD7BEfoKyrVNgg6gaGvfWEkdFvykzcIBFuf6BrckbYbVM_N_i7nwJlYHaZg/exec";
+
+import { contactApi, newsletterApi } from "@/services/api";
 
 type FormStatus = "idle" | "loading" | "success" | "error";
 
 export function ContactSection() {
-  const [formData, setFormData] = useState({ name: "", email: "", message: "" });
-  const [contactStatus, setContactStatus] = useState<FormStatus>("idle");
+  const [formData,       setFormData]       = useState({ name: "", email: "", message: "" });
+  const [contactStatus,  setContactStatus]  = useState<FormStatus>("idle");
 
-  const [newsletterEmail, setNewsletterEmail] = useState("");
+  const [newsletterEmail,  setNewsletterEmail]  = useState("");
   const [newsletterStatus, setNewsletterStatus] = useState<FormStatus>("idle");
 
-  // ── Shared fetch helper ──────────────────────────────────────
+  // ── Shared Google Sheets helper (existing, unchanged) ─────────────────────
   async function postToSheet(payload: object) {
     const submissionTime = new Date().toLocaleString("en-IN", {
       timeZone: "Asia/Kolkata",
@@ -23,24 +26,38 @@ export function ContactSection() {
       hour12: true,
     });
     await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      mode: "no-cors",
+      method:  "POST",
+      mode:    "no-cors",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ submissionTime, ...payload }),
+      body:    JSON.stringify({ submissionTime, ...payload }),
     });
   }
 
-  // ── Contact form submit ──────────────────────────────────────
+  // ── Contact form submit ───────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setContactStatus("loading");
+
+    const contactPayload = {
+      formType: "contact",
+      name:     formData.name,
+      email:    formData.email,
+      message:  formData.message,
+    };
+
     try {
-      await postToSheet({
-        formType: "contact",
-        name: formData.name,
-        email: formData.email,
-        message: formData.message,
-      });
+      // Google Sheets (existing) + Flask via service — both fire in parallel
+      await Promise.all([
+        postToSheet(contactPayload).catch((err) =>
+          console.warn("[Sheets/contact] failed silently:", err)
+        ),
+        contactApi.submit({
+          name:    formData.name,
+          email:   formData.email,
+          message: formData.message,
+        }),
+      ]);
+
       setContactStatus("success");
       setFormData({ name: "", email: "", message: "" });
       setTimeout(() => setContactStatus("idle"), 3000);
@@ -50,15 +67,20 @@ export function ContactSection() {
     }
   };
 
-  // ── Newsletter form submit ───────────────────────────────────
+  // ── Newsletter form submit ────────────────────────────────────────────────
   const handleNewsletterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setNewsletterStatus("loading");
+
     try {
-      await postToSheet({
-        formType: "newsletter",
-        email: newsletterEmail,
-      });
+      // Google Sheets (existing) + Flask via service — both fire in parallel
+      await Promise.all([
+        postToSheet({ formType: "newsletter", email: newsletterEmail }).catch((err) =>
+          console.warn("[Sheets/newsletter] failed silently:", err)
+        ),
+        newsletterApi.subscribe(newsletterEmail),
+      ]);
+
       setNewsletterStatus("success");
       setNewsletterEmail("");
       setTimeout(() => setNewsletterStatus("idle"), 3000);
@@ -88,7 +110,6 @@ export function ContactSection() {
               soon as possible.
             </p>
 
-            {/* Contact success state */}
             {contactStatus === "success" ? (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -172,7 +193,7 @@ export function ContactSection() {
                 <div>
                   <h3 className="text-[#0F2C59] mb-1" style={{ fontWeight: 600 }}>Address</h3>
                   <p className="text-gray-600">
-                    Aerobott, Ground Floor, Hotel Sahara Star
+                    Vaishya Community Startup Foundation, Ground Floor, Hotel Sahara Star
                     <br />
                     Vile Parle East, Mumbai
                   </p>
@@ -202,28 +223,19 @@ export function ContactSection() {
               <div className="pt-6">
                 <h3 className="text-[#0F2C59] mb-4" style={{ fontWeight: 600 }}>Follow Us</h3>
                 <div className="flex gap-4">
-                  <a
-                    href="https://www.facebook.com/profile.php?id=61565981560352&sk=followers"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-12 h-12 bg-[#0F2C59] rounded-lg flex items-center justify-center hover:bg-[#D4AF37] transition-all duration-300 group"
-                  >
+                  <a href="https://www.facebook.com/profile.php?id=61565981560352&sk=followers"
+                    target="_blank" rel="noopener noreferrer"
+                    className="w-12 h-12 bg-[#0F2C59] rounded-lg flex items-center justify-center hover:bg-[#D4AF37] transition-all duration-300 group">
                     <Facebook className="w-6 h-6 text-white group-hover:text-[#0F2C59]" />
                   </a>
-                  <a
-                    href="https://www.instagram.com/vaishyacommunitystartupfoundat/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-12 h-12 bg-[#0F2C59] rounded-lg flex items-center justify-center hover:bg-[#D4AF37] transition-all duration-300 group"
-                  >
+                  <a href="https://www.instagram.com/vaishyacommunitystartupfoundat/"
+                    target="_blank" rel="noopener noreferrer"
+                    className="w-12 h-12 bg-[#0F2C59] rounded-lg flex items-center justify-center hover:bg-[#D4AF37] transition-all duration-300 group">
                     <Instagram className="w-6 h-6 text-white group-hover:text-[#0F2C59]" />
                   </a>
-                  <a
-                    href="https://www.linkedin.com/in/vaishya-community-55120232b/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-12 h-12 bg-[#0F2C59] rounded-lg flex items-center justify-center hover:bg-[#D4AF37] transition-all duration-300 group"
-                  >
+                  <a href="https://www.linkedin.com/in/vaishya-community-55120232b/"
+                    target="_blank" rel="noopener noreferrer"
+                    className="w-12 h-12 bg-[#0F2C59] rounded-lg flex items-center justify-center hover:bg-[#D4AF37] transition-all duration-300 group">
                     <Linkedin className="w-6 h-6 text-white group-hover:text-[#0F2C59]" />
                   </a>
                 </div>
