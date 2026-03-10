@@ -1,11 +1,6 @@
 import { motion } from "motion/react";
 import { Mail, Phone, MapPin, Facebook, Instagram, Linkedin, CheckCircle } from "lucide-react";
 import { useState } from "react";
-
-// ── Config ────────────────────────────────────────────────────────────────────
-const APPS_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbzKJnB413FaD7BEfoKyrVNgg6gaGvfWEkdFvykzcIBFuf6BrckbYbVM_N_i7nwJlYHaZg/exec";
-
 import { contactApi, newsletterApi } from "@/services/api";
 
 type FormStatus = "idle" | "loading" | "success" | "error";
@@ -17,46 +12,17 @@ export function ContactSection() {
   const [newsletterEmail,  setNewsletterEmail]  = useState("");
   const [newsletterStatus, setNewsletterStatus] = useState<FormStatus>("idle");
 
-  // ── Shared Google Sheets helper (existing, unchanged) ─────────────────────
-  async function postToSheet(payload: object) {
-    const submissionTime = new Date().toLocaleString("en-IN", {
-      timeZone: "Asia/Kolkata",
-      day: "2-digit", month: "2-digit", year: "numeric",
-      hour: "2-digit", minute: "2-digit", second: "2-digit",
-      hour12: true,
-    });
-    await fetch(APPS_SCRIPT_URL, {
-      method:  "POST",
-      mode:    "no-cors",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ submissionTime, ...payload }),
-    });
-  }
-
   // ── Contact form submit ───────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setContactStatus("loading");
 
-    const contactPayload = {
-      formType: "contact",
-      name:     formData.name,
-      email:    formData.email,
-      message:  formData.message,
-    };
-
     try {
-      // Google Sheets (existing) + Flask via service — both fire in parallel
-      await Promise.all([
-        postToSheet(contactPayload).catch((err) =>
-          console.warn("[Sheets/contact] failed silently:", err)
-        ),
-        contactApi.submit({
-          name:    formData.name,
-          email:   formData.email,
-          message: formData.message,
-        }),
-      ]);
+      await contactApi.submit({
+        name:    formData.name,
+        email:   formData.email,
+        message: formData.message,
+      });
 
       setContactStatus("success");
       setFormData({ name: "", email: "", message: "" });
@@ -73,13 +39,7 @@ export function ContactSection() {
     setNewsletterStatus("loading");
 
     try {
-      // Google Sheets (existing) + Flask via service — both fire in parallel
-      await Promise.all([
-        postToSheet({ formType: "newsletter", email: newsletterEmail }).catch((err) =>
-          console.warn("[Sheets/newsletter] failed silently:", err)
-        ),
-        newsletterApi.subscribe(newsletterEmail),
-      ]);
+      await newsletterApi.subscribe(newsletterEmail);
 
       setNewsletterStatus("success");
       setNewsletterEmail("");

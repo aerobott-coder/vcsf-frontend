@@ -8,11 +8,6 @@ interface BecomeMemberModalProps {
   onClose: () => void;
 }
 
-// ── Config ────────────────────────────────────────────────────────────────────
-const APPS_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycby88K9vw3wm6ChJqlC2civx0csRCFuK8aPpy6Gi4bm15ouULFCfqWyFYjBgdkGDk5gJnA/exec";
-
-// ── Constants ─────────────────────────────────────────────────────────────────
 const MEMBER_TYPES = [
   { id: "chief-patron", label: "Chief Patron Member", amount: "1,00,000" },
   { id: "patron",       label: "Patron Member",        amount: "51,000"   },
@@ -38,15 +33,14 @@ const VAISH_GHATAK = [
 ];
 
 const STEPS = [
-  { id: 1, label: "Membership",  icon: null },
-  { id: 2, label: "Personal",    icon: null },
-  { id: 3, label: "Address",     icon: null },
-  { id: 4, label: "Attachments", icon: null },
+  { id: 1, label: "Membership"  },
+  { id: 2, label: "Personal"    },
+  { id: 3, label: "Address"     },
+  { id: 4, label: "Attachments" },
 ];
 
 type SubmitStatus = "idle" | "loading" | "success" | "error";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -61,7 +55,7 @@ function downloadCertificate(b64: string, name: string) {
   const blob  = new Blob([bytes], { type: "application/pdf" });
   const url   = URL.createObjectURL(blob);
   const a     = document.createElement("a");
-  a.href     = url;
+  a.href = url;
   a.download = `VCSF_Certificate_${name.replace(/\s+/g, "_")}.pdf`;
   a.click();
   URL.revokeObjectURL(url);
@@ -78,7 +72,6 @@ const initialForm = {
   aadhar: null as File | null,
 };
 
-// ── Component ─────────────────────────────────────────────────────────────────
 export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
   const [currentStep,   setCurrentStep]   = useState(1);
   const [memberType,    setMemberType]    = useState("promoter");
@@ -100,7 +93,6 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
     setForm({ ...form, [field]: e.target.files?.[0] || null });
 
   const handleClose = () => {
-    // Reset everything on close
     setCurrentStep(1);
     setMemberType("promoter");
     setGender("male");
@@ -123,18 +115,13 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
         form.aadhar ? fileToBase64(form.aadhar) : Promise.resolve(""),
       ]);
 
-      const submissionTime = new Date().toLocaleString("en-IN", {
-        timeZone: "Asia/Kolkata",
-        day: "2-digit", month: "2-digit", year: "numeric",
-        hour: "2-digit", minute: "2-digit", second: "2-digit",
-        hour12: true,
-      });
-
-      const sharedPayload = {
-        submissionTime, memberType,
-        memberLabel: selectedLabel,
+      // ── MongoDB only via Flask API ─────────────────────────────────────────
+      const flaskData = await memberApi.register({
+        memberType,
+        memberLabel:        selectedLabel,
         contributionAmount: contribution,
-        gender, maritalStatus,
+        gender,
+        maritalStatus,
         name:           form.name,
         fathersName:    form.fathersName,
         qualification:  form.qualification,
@@ -165,20 +152,7 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
         aadharBase64,
         aadharFileName: form.aadhar?.name || "",
         aadharMimeType: form.aadhar?.type || "",
-      };
-
-      const sheetsPromise = fetch(APPS_SCRIPT_URL, {
-        method: "POST", mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(sharedPayload),
       });
-
-      const flaskPromise = memberApi.register(sharedPayload);
-
-      const [, flaskData] = await Promise.all([
-        sheetsPromise.catch((err) => console.warn("[Sheets] failed silently:", err)),
-        flaskPromise,
-      ]);
 
       setCertB64(flaskData.certificateB64 ?? "");
       setMemberLabel(flaskData.memberLabel ?? selectedLabel);
@@ -195,13 +169,11 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
     }
   };
 
-  // ── Styles ──────────────────────────────────────────────────────────────────
   const inputCls =
     "w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:border-[#D4AF37] text-sm transition-all bg-white placeholder:text-gray-400";
   const labelCls = "block text-[#0F2C59] text-xs mb-1.5 font-semibold uppercase tracking-wide";
   const sectionCls = "text-[#0F2C59] text-sm font-bold mb-3 mt-5 flex items-center gap-2";
 
-  // ── Step content ─────────────────────────────────────────────────────────────
   const renderStep = () => {
     switch (currentStep) {
       case 1:
@@ -210,27 +182,15 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
             <p className="text-gray-500 text-sm mb-5">Choose the membership tier that best suits you.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {MEMBER_TYPES.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => setMemberType(m.id)}
-                  className={`relative text-left p-4 rounded-xl border-2 transition-all ${
-                    memberType === m.id
-                      ? "border-[#D4AF37] bg-[#D4AF37]/5 shadow-sm"
-                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                  }`}
-                >
+                <button key={m.id} type="button" onClick={() => setMemberType(m.id)}
+                  className={`relative text-left p-4 rounded-xl border-2 transition-all ${memberType === m.id ? "border-[#D4AF37] bg-[#D4AF37]/5 shadow-sm" : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"}`}>
                   {memberType === m.id && (
                     <span className="absolute top-3 right-3 w-4 h-4 rounded-full bg-[#D4AF37] flex items-center justify-center">
                       <span className="w-1.5 h-1.5 rounded-full bg-white" />
                     </span>
                   )}
-                  <p className={`text-xs font-bold uppercase tracking-wide mb-1 ${memberType === m.id ? "text-[#0F2C59]" : "text-gray-600"}`}>
-                    {m.label}
-                  </p>
-                  <p className={`text-lg font-bold ${memberType === m.id ? "text-[#D4AF37]" : "text-gray-400"}`}>
-                    ₹ {m.amount}
-                  </p>
+                  <p className={`text-xs font-bold uppercase tracking-wide mb-1 ${memberType === m.id ? "text-[#0F2C59]" : "text-gray-600"}`}>{m.label}</p>
+                  <p className={`text-lg font-bold ${memberType === m.id ? "text-[#D4AF37]" : "text-gray-400"}`}>₹ {m.amount}</p>
                 </button>
               ))}
             </div>
@@ -250,7 +210,6 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
                 <input type="text" name="fathersName" value={form.fathersName} onChange={handleChange} placeholder="Father's name" className={inputCls} />
               </div>
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <div>
                 <label className={labelCls}>Gender <span className="text-red-500">*</span></label>
@@ -275,7 +234,6 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
                 </div>
               </div>
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <div>
                 <label className={labelCls}>Date of Birth <span className="text-red-500">*</span></label>
@@ -286,7 +244,6 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
                 <input type="text" name="spouseName" value={form.spouseName} onChange={handleChange} placeholder="Husband / Wife name" className={inputCls} />
               </div>
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <div>
                 <label className={labelCls}>Date of Marriage</label>
@@ -297,7 +254,6 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
                 <input type="text" name="spouseDob" value={form.spouseDob} onChange={handleChange} placeholder="DD/MM/YYYY" className={inputCls} />
               </div>
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <div>
                 <label className={labelCls}>Qualification</label>
@@ -314,7 +270,6 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
                 </select>
               </div>
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <div>
                 <label className={labelCls}>Designation</label>
@@ -325,7 +280,6 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
                 <input type="text" name="firmName" value={form.firmName} onChange={handleChange} placeholder="Firm or company name" className={inputCls} />
               </div>
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <div>
                 <label className={labelCls}>Vaish Ghatak</label>
@@ -339,7 +293,6 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
                 <input type="text" name="gotra" value={form.gotra} onChange={handleChange} placeholder="Your gotra" className={inputCls} />
               </div>
             </div>
-
             <div className="mt-4">
               <label className={labelCls}>PAN Card</label>
               <input type="text" name="panCard" value={form.panCard} onChange={handleChange} placeholder="Enter PAN to get 80G certificate" className={inputCls} />
@@ -417,16 +370,12 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
           <motion.div key="step4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
             <p className={sectionCls}><Paperclip className="w-4 h-4 text-[#D4AF37]" /> Upload Documents</p>
 
-            {/* Photo upload */}
             <div className="mb-4">
               <label className={labelCls}>Your Photo <span className="text-red-500">*</span></label>
               <label className={`flex items-center gap-3 p-4 border-2 border-dashed rounded-xl cursor-pointer transition-all ${form.photo ? "border-green-400 bg-green-50" : "border-gray-200 hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/5"}`}>
                 <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, "photo")} className="hidden" />
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${form.photo ? "bg-green-100" : "bg-gray-100"}`}>
-                  {form.photo
-                    ? <CheckCircle className="w-5 h-5 text-green-500" />
-                    : <User className="w-5 h-5 text-gray-400" />
-                  }
+                  {form.photo ? <CheckCircle className="w-5 h-5 text-green-500" /> : <User className="w-5 h-5 text-gray-400" />}
                 </div>
                 <div>
                   <p className={`text-sm font-semibold ${form.photo ? "text-green-700" : "text-gray-600"}`}>
@@ -437,16 +386,12 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
               </label>
             </div>
 
-            {/* Aadhar upload */}
             <div className="mb-6">
               <label className={labelCls}>Aadhar Card <span className="text-red-500">*</span></label>
               <label className={`flex items-center gap-3 p-4 border-2 border-dashed rounded-xl cursor-pointer transition-all ${form.aadhar ? "border-green-400 bg-green-50" : "border-gray-200 hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/5"}`}>
                 <input type="file" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, "aadhar")} className="hidden" />
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${form.aadhar ? "bg-green-100" : "bg-gray-100"}`}>
-                  {form.aadhar
-                    ? <CheckCircle className="w-5 h-5 text-green-500" />
-                    : <Paperclip className="w-5 h-5 text-gray-400" />
-                  }
+                  {form.aadhar ? <CheckCircle className="w-5 h-5 text-green-500" /> : <Paperclip className="w-5 h-5 text-gray-400" />}
                 </div>
                 <div>
                   <p className={`text-sm font-semibold ${form.aadhar ? "text-green-700" : "text-gray-600"}`}>
@@ -457,7 +402,6 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
               </label>
             </div>
 
-            {/* Summary card */}
             <div className="bg-[#0F2C59]/5 rounded-xl p-4 mb-5 border border-[#0F2C59]/10">
               <p className="text-xs font-bold uppercase tracking-wide text-[#0F2C59] mb-3">Registration Summary</p>
               <div className="grid grid-cols-2 gap-y-2 text-sm">
@@ -472,7 +416,6 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
               </div>
             </div>
 
-            {/* Agreement */}
             <label className="flex items-start gap-3 cursor-pointer group">
               <div
                 onClick={() => setAgreed(!agreed)}
@@ -499,7 +442,7 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
     }
   };
 
-  // ── Success screen ───────────────────────────────────────────────────────────
+  // ── Success screen ────────────────────────────────────────────────────────────
   if (submitStatus === "success") {
     return (
       <AnimatePresence>
@@ -521,27 +464,21 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
               >
                 <CheckCircle className="w-10 h-10 text-green-500" />
               </motion.div>
-
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
                 <h3 className="text-2xl font-bold text-[#0F2C59] mb-2">Registration Successful!</h3>
                 <p className="text-gray-500 text-sm mb-1">
-                  Welcome as a{" "}
-                  <span className="font-semibold text-[#0F2C59]">{memberLabel}</span>
+                  Welcome as a <span className="font-semibold text-[#0F2C59]">{memberLabel}</span>
                 </p>
                 <p className="text-gray-400 text-xs mb-6">
-                  {certB64
-                    ? "Your membership certificate has been downloaded."
-                    : "Your registration has been submitted for review."}
+                  {certB64 ? "Your membership certificate has been downloaded." : "Your registration has been submitted for review."}
                 </p>
-
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   {certB64 && (
                     <button
                       onClick={() => downloadCertificate(certB64, form.name)}
                       className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#0F2C59] text-white rounded-xl font-semibold text-sm hover:bg-[#082040] transition-colors"
                     >
-                      <Download className="w-4 h-4" />
-                      Download Certificate
+                      <Download className="w-4 h-4" /> Download Certificate
                     </button>
                   )}
                   <button
@@ -559,7 +496,7 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
     );
   }
 
-  // ── Main modal ───────────────────────────────────────────────────────────────
+  // ── Main modal ────────────────────────────────────────────────────────────────
   return (
     <AnimatePresence>
       {isOpen && (
@@ -582,10 +519,7 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
                 <h2 className="text-lg font-bold">JOIN US — Online Membership</h2>
                 <p className="text-white/60 text-xs mt-0.5">Membership Benefits &nbsp;|&nbsp; IVF Membership / Donation</p>
               </div>
-              <button
-                onClick={handleClose}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors flex-shrink-0"
-              >
+              <button onClick={handleClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors flex-shrink-0">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -596,18 +530,10 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
                 {STEPS.map((step, i) => (
                   <div key={step.id} className="flex items-center gap-2 flex-1">
                     <div className="flex items-center gap-2 flex-1">
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-all ${
-                        currentStep > step.id
-                          ? "bg-green-500 text-white"
-                          : currentStep === step.id
-                            ? "bg-[#0F2C59] text-white"
-                            : "bg-gray-100 text-gray-400"
-                      }`}>
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-all ${currentStep > step.id ? "bg-green-500 text-white" : currentStep === step.id ? "bg-[#0F2C59] text-white" : "bg-gray-100 text-gray-400"}`}>
                         {currentStep > step.id ? "✓" : step.id}
                       </div>
-                      <span className={`text-xs font-semibold hidden sm:block transition-colors ${
-                        currentStep === step.id ? "text-[#0F2C59]" : currentStep > step.id ? "text-green-500" : "text-gray-400"
-                      }`}>
+                      <span className={`text-xs font-semibold hidden sm:block transition-colors ${currentStep === step.id ? "text-[#0F2C59]" : currentStep > step.id ? "text-green-500" : "text-gray-400"}`}>
                         {step.label}
                       </span>
                     </div>
@@ -619,14 +545,12 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
               </div>
             </div>
 
-            {/* Scrollable form body */}
+            {/* Scrollable body */}
             <div className="flex-1 overflow-y-auto px-6 py-5 min-h-0">
-              <AnimatePresence mode="wait">
-                {renderStep()}
-              </AnimatePresence>
+              <AnimatePresence mode="wait">{renderStep()}</AnimatePresence>
             </div>
 
-            {/* Footer navigation */}
+            {/* Footer */}
             <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between flex-shrink-0 bg-gray-50 rounded-b-2xl">
               <button
                 type="button"
@@ -636,11 +560,7 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
               >
                 <ChevronLeft className="w-4 h-4" /> Back
               </button>
-
-              <span className="text-xs text-gray-400 font-medium">
-                Step {currentStep} of {STEPS.length}
-              </span>
-
+              <span className="text-xs text-gray-400 font-medium">Step {currentStep} of {STEPS.length}</span>
               {currentStep < STEPS.length ? (
                 <button
                   type="button"
@@ -656,11 +576,10 @@ export function BecomeMemberModal({ isOpen, onClose }: BecomeMemberModalProps) {
                   disabled={submitStatus === "loading" || !agreed}
                   className="flex items-center gap-2 px-5 py-2 bg-[#D4AF37] text-[#0F2C59] rounded-xl text-sm font-bold hover:bg-[#E5C158] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                 >
-                  {submitStatus === "loading" ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Submitting…</>
-                  ) : (
-                    <>Submit Registration <ChevronRight className="w-4 h-4" /></>
-                  )}
+                  {submitStatus === "loading"
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Submitting…</>
+                    : <>Submit Registration <ChevronRight className="w-4 h-4" /></>
+                  }
                 </button>
               )}
             </div>
