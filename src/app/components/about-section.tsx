@@ -3,9 +3,9 @@ import { ImageWithFallback } from "./figma/ImageWithFallback";
 
 export function AboutSection() {
     return (
-        <section id="about" className="py-20 bg-gray-50 overflow-hidden">
-            <div className="container mx-auto px-6">
-                <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
+        <section id="about" className="py-12 sm:py-20 bg-gray-50 overflow-hidden">
+            <div className="container mx-auto px-4 sm:px-6">
+                <div className="flex flex-col lg:flex-row items-center gap-8 sm:gap-12 lg:gap-20">
                     {/* Left Column - Image */}
                     <motion.div
                         initial={{ opacity: 0, x: -50 }}
@@ -36,18 +36,18 @@ export function AboutSection() {
                         transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
                         className="w-full lg:w-1/2 flex flex-col"
                     >
-                        <span className="text-[#D4AF37] font-semibold uppercase tracking-widest text-2xl mb-4 block">
+                        <span className="text-[#D4AF37] font-semibold uppercase tracking-widest text-lg sm:text-2xl mb-3 sm:mb-4 block">
                             About Us
                         </span>
 
                         <h2
-                            className="text-[#0F2C59] text-3xl md:text-4xl lg:text-5xl mb-8"
+                            className="text-[#0F2C59] text-2xl sm:text-3xl md:text-4xl lg:text-5xl mb-5 sm:mb-8"
                             style={{ fontWeight: 800, lineHeight: 1.2 }}
                         >
                             Building a Stronger <span className="text-[#D4AF37]">Vaishya Community</span>
                         </h2>
 
-                        <div className="space-y-6 text-gray-700 leading-relaxed text-lg">
+                        <div className="space-y-4 sm:space-y-6 text-gray-700 leading-relaxed text-base sm:text-lg">
                             <p>
                                 Vaishya Community Startup Foundation is formed with a vision to support
                                 education, entrepreneurship, and social development within the Vaishya community.
@@ -61,7 +61,7 @@ export function AboutSection() {
                         </div>
 
                         <motion.div
-                            className="mt-10"
+                            className="mt-8 sm:mt-10"
                             initial={{ opacity: 0, y: 20 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
@@ -69,7 +69,7 @@ export function AboutSection() {
                         >
                             <a
                                 href="#contact"
-                                className="inline-block px-8 py-4 bg-[#0F2C59] text-white rounded-lg hover:bg-[#D4AF37] hover:text-[#0F2C59] transition-all duration-300 font-bold shadow-lg hover:shadow-xl hover:-translate-y-1"
+                                className="inline-block px-6 sm:px-8 py-3 sm:py-4 bg-[#0F2C59] text-white rounded-lg hover:bg-[#D4AF37] hover:text-[#0F2C59] transition-all duration-300 font-bold shadow-lg hover:shadow-xl hover:-translate-y-1 text-sm sm:text-base"
                                 onClick={(e) => {
                                     e.preventDefault();
                                     document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });

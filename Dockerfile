@@ -1,25 +1,24 @@
-# Use the official Node.js image
-FROM node:14
+FROM node:20-alpine
 
-# Create and change to the app directory
 WORKDIR /usr/src/app
 
-# Copy application dependency manifests to the container image
 COPY package*.json ./
+RUN npm ci
 
-# Install dependencies
-RUN npm install
+# Build-time args for Vite env vars
+ARG VITE_API_URL
+ARG VITE_APP_NAME
+ARG VITE_APP_VERSION
+ARG VITE_ENVIRONMENT
 
-# Add build-time argument
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_APP_NAME=$VITE_APP_NAME
+ENV VITE_APP_VERSION=$VITE_APP_VERSION
+ENV VITE_ENVIRONMENT=$VITE_ENVIRONMENT
 
-
-
-# Copy local code to the container image
 COPY . .
-
-# Build the app
 RUN npm run build
 
-# Serve the app
 RUN npm install -g serve
-CMD ["serve", "-s", "build"]
+EXPOSE 8080
+CMD ["serve", "-s", "dist", "-l", "8080"]
