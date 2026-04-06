@@ -1,0 +1,24 @@
+FROM node:20-alpine
+
+WORKDIR /usr/src/app
+
+COPY package*.json ./
+RUN npm ci
+
+# Build-time args for Vite env vars
+ARG VITE_API_URL
+ARG VITE_APP_NAME
+ARG VITE_APP_VERSION
+ARG VITE_ENVIRONMENT
+
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_APP_NAME=$VITE_APP_NAME
+ENV VITE_APP_VERSION=$VITE_APP_VERSION
+ENV VITE_ENVIRONMENT=$VITE_ENVIRONMENT
+
+COPY . .
+RUN npm run build
+
+RUN npm install -g serve
+EXPOSE 8080
+CMD ["serve", "-s", "dist", "-l", "8080"]
